@@ -101,13 +101,20 @@ module.exports = {
       return function(accessToken, refreshToken, profile, callback) {
         var req = self.apos.tasks.getReq();
         var criteria = {};
-        var emails = [];
+        var emails;
         
         if (spec.accept) {
           if (!spec.accept(profile)) {
             return callback(null, false);
           }
-        }        
+        }     
+        
+        emails = self.getRelevantEmailsFromProfile(spec, profile);   
+        if (spec.emailDomain && (!emails.length)) {
+          // Email domain filter is in effect and user has no emails or
+          // only emails in the wrong domain
+          return callback(null, false);
+        }
 
         if (typeof(spec.match) === 'function') {
           criteria = spec.match(profile);
@@ -130,31 +137,9 @@ module.exports = {
             break;
             case 'email':
             case 'emails':
-            if (Array.isArray(profile.emails) && profile.emails.length) {
-              _.each(profile.emails || [], function(email) {
-                if (typeof(email) === 'string') {
-                  // maybe someone does this as simple strings...
-                  emails.push(email);
-                  // but google does it as objects with value properties
-                } else if (email && email.value) {
-                  emails.push(email.value);
-                }
-              });
-            } else if (profile.email) {
-              emails.push(profile.email);
-            } else {
-              console.error('apostrophe-passport: profile has no email or emails property. You probably want to set the "match" option for this strategy to "id" or "username".');
+            if (!emails.length) {
+              // User has no email
               return callback(null, false);
-            }
-            if (spec.emailDomain) {
-              emails = _.filter(emails, function(email) {
-                var endsWith = '@' + spec.emailDomain;
-                return email.substr(email.length - endsWith.length) === endsWith;
-              });
-              if (!emails.length) {
-                // User is in the wrong domain
-                return callback(null, false);
-              }
             }
             criteria.$or = _.map(emails, function(email) {
               return { email: email };
@@ -185,6 +170,35 @@ module.exports = {
       };
     };
     
+    // Returns an array of email addresses found in the user's
+    // profile, via profile.emails[n].value, profile.emails[n] (a string),
+    // or profile.email. Passport strategies usually normalize
+    // to the first of the three.
+    
+    self.getRelevantEmailsFromProfile = function(spec, profile) {
+      var emails = [];
+      if (Array.isArray(profile.emails) && profile.emails.length) {
+        _.each(profile.emails || [], function(email) {
+          if (typeof(email) === 'string') {
+            // maybe someone does this as simple strings...
+            emails.push(email);
+            // but google does it as objects with value properties
+          } else if (email && email.value) {
+            emails.push(email.value);
+          }
+        });
+      } else if (profile.email) {
+        emails.push(profile.email);
+      }
+      if (spec.emailDomain) {
+        emails = _.filter(emails, function(email) {
+          var endsWith = '@' + spec.emailDomain;
+          return email.substr(email.length - endsWith.length) === endsWith;
+        });
+      }
+      return emails;
+    };
+    
     // Create a new user based on a profile. This occurs only
     // if the "create" option is set and a user arrives who has
     // a valid passport profile but does not exist in the local database.
@@ -197,15 +211,9 @@ module.exports = {
       if (!user.username) {
         user.username = self.apos.utils.slugify(user.title);
       }
-      var email = profile.emails && profile.emails[0] && profile.emails[0].value;
-      if (!email) {
-        email = profile.emails && profile.emails[0];
-      }
-      if (!email) {
-        email = profile.email;
-      }
-      if (email) {
-        user.email = email;
+      var emails = self.getRelevantEmailsFromProfile(spec, profile);
+      if (emails.length) {
+        user.email = emails[0];
       }
       if (profile.name) {
         user.firstName = profile.name.givenName;
