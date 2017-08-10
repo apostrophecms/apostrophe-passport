@@ -1,13 +1,18 @@
+## Purpose
+
+`apostrophe-passport` works together with `passport-google-oauth20`, `passport-gitlab2` and similar [passport](https://npmjs.org/package/passport) strategy modules to let users log in to Apostrophe CMS sites via Google, Gitlab and other authentication providers. This feature is often called federation or single sign-on.
+
 ## Installation
 
 You need this module, plus the [passport](https://npmjs.org/package/passport) strategy module(s) of your choice:
 
 ```
 npm install --save apostrophe-passport
+# Just an example, lots of passport modules will work
 npm install --save passport-gitlab2
 ```
 
-Most modules that let you log in via a third-party website will work.
+Most modules that have "passport" in the name and let you log in via a third-party website will work.
 
 ## Configuration
 
@@ -41,7 +46,7 @@ Most modules that let you log in via a third-party website will work.
 
 ## Where do I `require` the passport strategy?
 
-You don't. Apostrophe does it for you.
+You don't. Apostrophe does it for you. You pass its configuration in the `options` key, and sometimes also the `authenticate` key if it has options that must be passed to its `authenticate` middleware, as with Google (you'll see this in its documentation).
 
 ## How do users log in?
 
@@ -69,11 +74,23 @@ So in this case, you'll want to add a login button to the `layout.html` of your 
 
 That's all there is to it. When a user reaches this URL they are redirected to begin the authorization process with Gitlab, or the service of your choice.
 
+## Where do I get my `clientID`, `clientSecret`, etc.?
+
+You get these from the website users will log in on, usually by adding an "app" to your profile or developer console. For Google you will need to [create an application in the Google API console and authorize it to use the Google+ API service to access profile information](https://developers.google.com/+/web/api/rest/oauth) (no, this does not mean users have to do anything with Google Plus). See the documentation of the passport strategy module you're using.
+
+You will need to specify a `callbackURL` when registering your "app." You can print that information via the same command line task we saw above:
+
+```
+node app apostrophe-passport:list-urls`
+```
+
+> You can use a URL like `http://localhost:3000` for testing but in production you must use your production URL. You cannot use an IP address for your callback URL, at least not with Google.
+
 ## Google login, and creating users on the fly
 
 By default, users are not created if they don't already exist on the site. If the user on the federated site (gitlab, in this example) is valid but the same username doesn't exist on the Apostrophe site, no login takes place. It's possible to change this.
 
-Google login is a popular case where creating users on the fly can make sense as long as they are part of your email domain. First, here's what Google login looks like:
+Google login is a popular case where creating users on the fly can make sense as long as they are part of your email domain. Here's a working configuration for Google login. Note that you must first `npm install` the `passport-google-oauth20` module for your project.
 
 ```javascript
 'apostrophe-passport': {
@@ -82,7 +99,7 @@ Google login is a popular case where creating users on the fly can make sense as
       // google login via openauth
       // You must npm install --save this module in your project first
       module: 'passport-google-oauth20',
-      // Default is to match usernames, google has none, match on emails
+      // Default is to match usernames, google has none, so match on emails
       match: 'email',
       // IMPORTANT: accept only users with an email address at our company
       emailDomain: 'mycompany.com',
@@ -113,9 +130,9 @@ Google login is a popular case where creating users on the fly can make sense as
 }
 ```
 
-"What is this `authenticate` key about?" For whatever reason, the `passport-google-oauth20` module requires that some options be passed to passport's `authenticate` middleware, rather than when configuring the strategy. 
+"What is this `authenticate` key about?" For whatever reason, the `passport-google-oauth20` module requires that some options be passed to passport's `authenticate` middleware, rather than when configuring the strategy. `scope` is one of these and it is required by Google.
 
-"Do I have to pre-create the group?" No, it will be created for you. Also, if you supply a `permissions` property, it will always be refreshed to those permissions at restart. You might consider leaving that property off and manually setting the permissions via the groups editor.
+"Do I have to pre-create the group users will be added to?" No, it will be created for you. Also, if you supply a `permissions` property, it will always be refreshed to those permissions at restart. You might consider leaving that property off and manually setting the permissions via the groups editor.
 
 ## Wait, how do permissions in Apostrophe work again?
 
@@ -149,9 +166,7 @@ To accommodate multiple strategies, If the strategy name is `google`, then the i
 
 ### `email`
 
-Either of these will match on any email address in the user's profile, whether it is an array in `.emails` containing objects with `.value` properties (as with Google), an array of strings in `.emails`, or just an `email` string property. To minimize confusion you can also set `match` to `emails` which has the same effect.
-
-You may wish to accept only users from one email domain, which is very handy if your company's email is hosted by Google (aka "G Suite"). For that, also set the `emailDomain` option to the domain name you wish to allow. All others are rejected.
+This will match on any email the authentication provider indicates they own, whether it is an array in the `.emails` property of their profile containing objects with `.value` properties (as with Google), an array of strings in `.emails`, or just an `email` string property. *To minimize confusion you can also set `match` to `emails` which has the same effect. Either way it will check all three cases.*
 
 ### `username`
 
@@ -161,13 +176,17 @@ The default. Users are matched based on having the same username.
 
 If you provide a function, it will receive the user's profile from the passport strategy, and must return a MongoDB criteria object matching the appropriate user. Do not worry about checking the `disabled` or `type` properties, Apostrophe will handle that.
 
+## Locking down your site by email address domain name
+
+You may wish to accept only users from one email domain, which is very handy if your company's email is hosted by Google (aka "G Suite"). For that, also set the `emailDomain` option to the domain name you wish to allow. All others are rejected. This is very important if you are using the `create` option.
+
 ## Rejecting users for your own reasons
 
 You can set your own policy for rejecting users by passing an `accept` function for any strategy. This function takes the `profile` object provided by the passport strategy and must return `true` otherwise the user is not permitted to log in.
 
 ## Disabling ordinary logins
 
-"This is great, but I want to get rid of the `/login` page." You can:
+"This is great, but I want to get rid of the regular `/login` page." You can:
 
 ```javascript
 // in app.js
