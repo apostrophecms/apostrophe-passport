@@ -1,0 +1,20 @@
+{# You will almost certainly want to override this template to #}
+{# extend your own project's layout like your pages do, etc. #}
+
+{% extends data.outerLayout %}
+
+{% block main %}
+  <h2>A login error occurred</h2>
+  <p>
+    An error occurred while logging in via {{ __(data.spec.label or data.spec.name) }}:
+  </p>
+  <p>
+    {{ __(data.message) }}
+  </p>
+  <p>
+    If you believe you are seeing this message in error please contact the administrator.
+  </p>
+  <p>
+    <a href="/">Go Home</a>
+  </p>
+{% endblock %}

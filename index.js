@@ -47,18 +47,20 @@ module.exports = {
           ), self.findOrCreateUser(spec));
           spec.name = dummy.name;
         }
-        spec.options.callbackURL = self.getCallbackUrl(spec);
+        spec.options.callbackURL = self.getCallbackUrl(spec, true);
         self.apos.login.passport.use(new Strategy(spec.options, self.findOrCreateUser(spec)));
         self.addLoginRoute(spec);
         self.addCallbackRoute(spec);
+        self.addFailureRoute(spec);
       });
     };
 
     // Returns the oauth2 callback URL, which must match the route
-    // established by `addCallbackRoute`.
+    // established by `addCallbackRoute`. If `absolute` is true
+    // then `baseUrl` is prepended.
 
-    self.getCallbackUrl = function(spec) {
-      return self.apos.baseUrl + '/auth/' + spec.name + '/callback';        
+    self.getCallbackUrl = function(spec, absolute) {
+      return (absolute ? self.apos.baseUrl : '') + '/auth/' + spec.name + '/callback';        
     };
     
     self.getLoginUrl = function(spec) {
@@ -75,7 +77,7 @@ module.exports = {
     // Adds the oauth2 callback route, which is invoked 
       
     self.addCallbackRoute = function(spec) {
-      self.apos.app.get('/auth/' + spec.name + '/callback',
+      self.apos.app.get(self.getCallbackUrl(spec, false),
         // middleware
         self.apos.login.passport.authenticate(
           spec.name,
@@ -88,8 +90,17 @@ module.exports = {
       );
     };
     
+    self.addFailureRoute = function(spec) {
+      self.apos.app.get(self.getFailureUrl(spec), function(req, res) {
+        // Gets i18n'd in the template, also bc with what templates that tried to work
+        // before certain fixes would expect (this is why we still pass a string and not
+        // a flag, and why we call it `message`)
+        return self.sendPage(req, 'error', { spec: spec, message: 'Your credentials were not accepted, your account is not affiliated with this site, or an existing account has the same username or email address.' });
+      });
+    }
+    
     self.getFailureUrl = function(spec) {
-      return '/';
+      return '/auth/' + spec.name + '/error';
     };
     
     // Given a strategy spec from the configuration, return
@@ -162,7 +173,10 @@ module.exports = {
           }
           return self.createUser(spec, profile, function(err, user) {
             if (err) {
-              return callback(err);
+              // Typically a duplicate key, not surprising with username and
+              // email address duplication possibilities when we're matching
+              // on the other field, treat it as a login error
+              return callback(null, false);
             }
             return callback(null, user);
           });
@@ -256,7 +270,7 @@ module.exports = {
       });
       console.log('\nThese are the callback URLs you may need to configure on sites:\n');
       _.each(self.options.strategies, function(spec) {
-        console.log(self.getCallbackUrl(spec));
+        console.log(self.getCallbackUrl(spec, true));
       });
       return callback(null);
     };

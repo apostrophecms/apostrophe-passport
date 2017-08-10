@@ -203,10 +203,19 @@ modules: {
 
 > The login page is powered by Passport's `local` strategy, which is added to Apostrophe by the standard `apostrophe-login` module. That's why we disable it there and not in `apostrophe-passport`'s options.
 
+## Overriding the error page
+
+If login fails, for instance because you are matching on `email` but the `username` duplicates another account, or because a user is valid in Google but `emailDomain` does not match, the `error.html` template of the `apostrophe-passport` module is rendered. By default, it works, but it's pretty ugly! You'll want to customize it to your project's needs.
+
+Like other templates in Apostrophe, you can override this template by copying it to `lib/modules/apostrophe-passport/views/error.html` *in your project* (**do not modify the npm module itself**). You can then extend your own layout template and so on, just as you have most likely already done for the 404 Not Found page or the `login.html` page.
+
+## Frequently Asked Questions
+
 "What about redirecting `/login` to one of these fancy new strategies?"
 
 You can do that. Once the login page is gone, it's possible for you to decide what happens at that URL. Use the [apostrophe-redirects](https://npmjs.org/package/apostrophe-redirects) module to set it up through a nice UI, or add an Express route and a redirect in your own code.
 
 "I tried this with [passport strategy module X] and it didn't work."
 
-Feel free to open an issue but be sure to provide full specifics and a test project. Note that some strategies may not follow the standard practices this module is built upon. Those written by Jared Hanson or following his best practices should work well.
+Feel free to open an issue but be sure to provide full specifics and a test project. Note that some strategies may not follow the standard practices this module is built upon. Those written by Jared Hanson, the author of Passport, or following his best practices should work well. You might want to test directly with the sample code provided with that strategy module first, to rule out problems with the module or with your configuration of it.
+
