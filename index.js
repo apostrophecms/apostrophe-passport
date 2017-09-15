@@ -75,7 +75,7 @@ module.exports = {
         if (self.apos.prefix) {
           // Remove the prefix if present, so that app.get doesn't
           // add it redundantly
-          return url.replace(new RegExp('^' + self.apos.utils.quoteRegexp(self.apos.prefix)), '');
+          return url.replace(new RegExp('^' + self.apos.utils.regExpQuote(self.apos.prefix)), '');
         }
         return parsed.pathname;
       }
