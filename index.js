@@ -57,14 +57,36 @@ module.exports = {
 
     // Returns the oauth2 callback URL, which must match the route
     // established by `addCallbackRoute`. If `absolute` is true
-    // then `baseUrl` is prepended.
+    // then `baseUrl` and `apos.prefix` are prepended, otherwise
+    // not (because `app.get` automatically prepends a prefix).
+    // If the callback URL was preconfigured via spec.options.callbackURL
+    // it is returned as-is when `absolute` is true, otherwise
+    // the pathname is returned with any `apos.prefix` removed
+    // to avoid adding it twice in `app.get` calls.
 
     self.getCallbackUrl = function(spec, absolute) {
-      return (absolute ? self.apos.baseUrl : '') + '/auth/' + spec.name + '/callback';        
+      if (spec.options && spec.options.callbackURL) {
+        var url = spec.options.callbackURL;
+        if (absolute) {
+          return url;
+        }
+        var parsed = require('url').parse(url);
+        url = parsed.pathname;
+        if (self.apos.prefix) {
+          // Remove the prefix if present, so that app.get doesn't
+          // add it redundantly
+          return url.replace(new RegExp('^' + self.apos.utils.regExpQuote(self.apos.prefix)), '');
+        }
+        return parsed.pathname;
+      }
+      return (absolute ? (self.apos.baseUrl + self.apos.prefix) : '') + '/auth/' + spec.name + '/callback';        
     };
     
-    self.getLoginUrl = function(spec) {
-      return '/auth/' + spec.name + '/login';
+    // Returns the URL you should link users to in order for them
+    // to log in. If `absolute` is true then `baseUrl` and `apos.prefix`
+    // are prepended, otherwise not (because `app.get` automatically prepends a prefix).
+    self.getLoginUrl = function(spec, absolute) {
+      return (absolute ? (self.apos.baseUrl + self.apos.prefix) : '') + '/auth/' + spec.name + '/login';
     }
 
     // Adds the login route, which will be `/modules/apostrophe-login-gitlab/login`.
@@ -266,7 +288,7 @@ module.exports = {
     self.listUrlsTask = function(callback) {
       console.log('These are the login URLs you may wish to link users to:\n');
       _.each(self.options.strategies, function(spec) {
-        console.log(self.getLoginUrl(spec));
+        console.log(self.getLoginUrl(spec, true));
       });
       console.log('\nThese are the callback URLs you may need to configure on sites:\n');
       _.each(self.options.strategies, function(spec) {
