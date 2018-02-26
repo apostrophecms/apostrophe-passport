@@ -12,6 +12,7 @@ module.exports = {
   construct: function(self, options) {
 
     self.enablePassportStrategies = function() {
+      self.strategies = {};
       if (!self.apos.baseUrl) {
         throw new Error('apostrophe-passport: you must configure the top-level "baseUrl" option to apostrophe');
       }
@@ -48,7 +49,8 @@ module.exports = {
           spec.name = dummy.name;
         }
         spec.options.callbackURL = self.getCallbackUrl(spec, true);
-        self.apos.login.passport.use(new Strategy(spec.options, self.findOrCreateUser(spec)));
+        self.strategies[spec.name] = new Strategy(spec.options, self.findOrCreateUser(spec));
+        self.apos.login.passport.use(self.strategies[spec.name]);
         self.addLoginRoute(spec);
         self.addCallbackRoute(spec);
         self.addFailureRoute(spec);
