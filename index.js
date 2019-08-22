@@ -49,8 +49,13 @@ module.exports = {
           spec.name = dummy.name;
         }
         spec.options.callbackURL = self.getCallbackUrl(spec, true);
-        self.strategies[spec.name] = new Strategy(spec.options, self.findOrCreateUser(spec));
+        if (spec.name !== 'ldapauth')
+          self.strategies[spec.name] = new Strategy(spec.options, self.findOrCreateUser(spec));
+        else 
+          self.strategies[spec.name] = new Strategy(spec.options, self.ldapFindOrCreateUser(spec));
         self.apos.login.passport.use(self.strategies[spec.name]);
+        // self.apos.app.use(self.apos.login.passport.initialize());
+        // self.apos.app.use(self.apos.login.passport.session());
         self.addLoginRoute(spec);
         self.addCallbackRoute(spec);
         self.addFailureRoute(spec);
@@ -95,7 +100,10 @@ module.exports = {
     // Redirect users to this URL to start the process of logging them in via gitlab
 
     self.addLoginRoute = function(spec) {
-      self.apos.app.get(self.getLoginUrl(spec), self.apos.login.passport.authenticate(spec.name, spec.authenticate));
+      if (spec.name !== 'ldapauth')
+        self.apos.app.get(self.getLoginUrl(spec), self.apos.login.passport.authenticate(spec.name, spec.authenticate));
+      else 
+        self.apos.app.post(self.getLoginUrl(spec), self.apos.login.passport.authenticate(spec.name, {successRedirect: '/',failureRedirect: '/login?error=1'}));
     };
 
     // Adds the oauth2 callback route, which is invoked 
@@ -131,80 +139,97 @@ module.exports = {
     // an oauth passport callback function to find the user based
     // on the profile, creating them if appropriate.
 
-    self.findOrCreateUser = function(spec) {
+    self.ldapFindOrCreateUser = function(spec) {
+      return function(profile, callback) {
+        self.completeLdapProfile(profile);
+        self.implementFindOrCreateUser(spec, "", "", profile, callback);
+      }
+    };
 
-      return function(accessToken, refreshToken, profile, callback) {
-        var req = self.apos.tasks.getReq();
-        var criteria = {};
-        var emails;
-        
-        if (spec.accept) {
-          if (!spec.accept(profile)) {
-            return callback(null, false);
-          }
-        }     
-        
-        emails = self.getRelevantEmailsFromProfile(spec, profile);   
-        if (spec.emailDomain && (!emails.length)) {
-          // Email domain filter is in effect and user has no emails or
-          // only emails in the wrong domain
+    self.completeLdapProfile = function(profile) {
+      profile.username = profile.uid;
+      profile.displayName = profile.uid;
+      profile.email = profile.mail;
+    }
+
+    self.implementFindOrCreateUser = function(spec, accessToken, refreshToken, profile, callback) {
+      var req = self.apos.tasks.getReq();
+      var criteria = {};
+      var emails;
+      
+      if (spec.accept) {
+        if (!spec.accept(profile)) {
           return callback(null, false);
         }
+      }     
+      
+      emails = self.getRelevantEmailsFromProfile(spec, profile);   
+      if (spec.emailDomain && (!emails.length)) {
+        // Email domain filter is in effect and user has no emails or
+        // only emails in the wrong domain
+        return callback(null, false);
+      }
 
-        if (typeof(spec.match) === 'function') {
-          criteria = spec.match(profile);
-        } else {
-          switch (spec.match || 'username') {
-            case 'id':
-            criteria = {};
-            if (!profile.id) {
-              console.error('apostrophe-passport: profile has no id. You probably want to set the "match" option for this strategy to "username" or "email".');
-              return callback(null, false);
-            }
-            criteria[spec.name + 'Id'] = profile.id;
-            break;
-            case 'username':
-            if (!profile.username) {
-              console.error('apostrophe-passport: profile has no username. You probably want to set the "match" option for this strategy to "id" or "email".');
-              return callback(null, false);
-            }
-            criteria.username = profile.username;
-            break;
-            case 'email':
-            case 'emails':
-            if (!emails.length) {
-              // User has no email
-              return callback(null, false);
-            }
-            criteria.$or = _.map(emails, function(email) {
-              return { email: email };
-            });
-            break;
-            default:
-            return callback(new Error('apostrophe-passport: ' + spec.match + ' is not a supported value for the match property'));
-          }
-        }
-        criteria.disabled = { $ne: true };
-        return self.apos.users.find(req, criteria).toObject(function(err, user) {
-          if (err) {
-            return callback(err);
-          }
-          if (user) {
-            return callback(null, user);
-          }
-          if (!self.options.create) {
+      if (typeof(spec.match) === 'function') {
+        criteria = spec.match(profile);
+      } else {
+        switch (spec.match || 'username') {
+          case 'id':
+          criteria = {};
+          if (!profile.id) {
+            console.error('apostrophe-passport: profile has no id. You probably want to set the "match" option for this strategy to "username" or "email".');
             return callback(null, false);
           }
-          return self.createUser(spec, profile, function(err, user) {
-            if (err) {
-              // Typically a duplicate key, not surprising with username and
-              // email address duplication possibilities when we're matching
-              // on the other field, treat it as a login error
-              return callback(null, false);
-            }
-            return callback(null, user);
+          criteria[spec.name + 'Id'] = profile.id;
+          break;
+          case 'username':
+          if (!profile.username) {
+            console.error('apostrophe-passport: profile has no username. You probably want to set the "match" option for this strategy to "id" or "email".');
+            return callback(null, false);
+          }
+          criteria.username = profile.username;
+          break;
+          case 'email':
+          case 'emails':
+          if (!emails.length) {
+            // User has no email
+            return callback(null, false);
+          }
+          criteria.$or = _.map(emails, function(email) {
+            return { email: email };
           });
+          break;
+          default:
+          return callback(new Error('apostrophe-passport: ' + spec.match + ' is not a supported value for the match property'));
+        }
+      }
+      criteria.disabled = { $ne: true };
+      return self.apos.users.find(req, criteria).toObject(function(err, user) {
+        if (err) {
+          return callback(err);
+        }
+        if (user) {
+          return callback(null, user);
+        }
+        if (!self.options.create) {
+          return callback(null, false);
+        }
+        return self.createUser(spec, profile, function(err, user) {
+          if (err) {
+            // Typically a duplicate key, not surprising with username and
+            // email address duplication possibilities when we're matching
+            // on the other field, treat it as a login error
+            return callback(null, false);
+          }
+          return callback(null, user);
         });
+      });
+    }
+
+
+    self.findOrCreateUser = function(spec) {
+      return function(accessToken, refreshToken, profile, callback) {
+        self.implementFindOrCreateUser(spec, accessToken, refreshToken, profile, callback);
       };
     };
     
