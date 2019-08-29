@@ -49,7 +49,7 @@ module.exports = {
           spec.name = dummy.name;
         }
         spec.options.callbackURL = self.getCallbackUrl(spec, true);
-        if (spec.name !== 'ldapauth')
+        if (spec.ldapAuth !== true)
           self.strategies[spec.name] = new Strategy(spec.options, self.findOrCreateUser(spec));
         else 
           self.strategies[spec.name] = new Strategy(spec.options, self.ldapFindOrCreateUser(spec));
@@ -100,7 +100,7 @@ module.exports = {
     // Redirect users to this URL to start the process of logging them in via gitlab
 
     self.addLoginRoute = function(spec) {
-      if (spec.name !== 'ldapauth')
+      if (spec.postRoute !== true)
         self.apos.app.get(self.getLoginUrl(spec), self.apos.login.passport.authenticate(spec.name, spec.authenticate));
       else 
         self.apos.app.post(self.getLoginUrl(spec), self.apos.login.passport.authenticate(spec.name, {successRedirect: '/',failureRedirect: '/login?error=1'}));
