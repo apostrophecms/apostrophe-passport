@@ -259,14 +259,14 @@ module.exports = {
           user.firstName += ' ' + profile.name.middleName;
         }
         user.lastName = profile.name.familyName;
+      } else if (profile.firstName || profile.lastName) {
+        user.firstName = profile.firstName;
+        user.lastName = profile.lastName;
       } else if (profile.displayName) {
         parsedName = humanname.parse(profile.displayName);
         user.firstName = parsedName.firstName;
         user.lastName = parsedName.lastName;
-      } else {
-        user.firstName = profile.firstName;
-        user.lastName = profile.lastName;
-      }
+      } 
       var req = self.apos.tasks.getReq();
       if (self.createGroup) {
         user.groupIds = [ self.createGroup._id ];
