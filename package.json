@@ -1,6 +1,6 @@
 {
   "name": "apostrophe-passport",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "description": "Universal bridge to most Passport login strategies for the Apostrophe CMS, allowing login via Google, etc.",
   "main": "index.js",
   "scripts": {
