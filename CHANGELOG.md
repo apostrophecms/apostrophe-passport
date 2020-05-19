@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.2.1
+
+Fixes the repository information in `package.json`.
+
 ## 2.2.0
 
 If the `firstName` and `lastName` are available from the strategy, use those in preference to attempting to parse `displayName`. Thanks to RyamBaCo for this contribution.

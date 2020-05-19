@@ -1,6 +1,6 @@
 {
   "name": "apostrophe-passport",
-  "version": "2.2.0",
+  "version": "2.2.1",
   "description": "Universal bridge to most Passport login strategies for the Apostrophe CMS, allowing login via Google, etc.",
   "main": "index.js",
   "scripts": {
@@ -8,19 +8,18 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/punkave/apostrophe-login-gitlab.git"
+    "url": "git+https://github.com/apostrophecms/apostrophe-passport.git"
   },
   "keywords": [
     "apostrophe",
-    "gitlab",
     "login"
   ],
-  "author": "P'unk Avenue LLC",
+  "author": "Apostrophe Technologies, Inc.",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/punkave/apostrophe-passport/issues"
+    "url": "https://github.com/apostrophecms/apostrophe-passport/issues"
   },
-  "homepage": "https://github.com/punkave/apostrophe-passport#readme",
+  "homepage": "https://github.com/apostrophecms/apostrophe-passport#readme",
   "dependencies": {
     "humanname": "^0.2.2",
     "lodash": "^4.17.4"
