@@ -48,6 +48,7 @@ module.exports = {
           ), self.findOrCreateUser(spec));
           spec.name = dummy.name;
         }
+        spec.label = spec.label || spec.name;
         spec.options.callbackURL = self.getCallbackUrl(spec, true);
         self.strategies[spec.name] = new Strategy(spec.options, self.findOrCreateUser(spec));
         self.apos.login.passport.use(self.strategies[spec.name]);
@@ -55,6 +56,12 @@ module.exports = {
         self.addCallbackRoute(spec);
         self.addFailureRoute(spec);
       });
+
+      self.route(
+        'get',
+        'after-cross-domain-session-token',
+        self.apos.login.afterLogin
+      );
     };
 
     // Returns the oauth2 callback URL, which must match the route
@@ -91,15 +98,27 @@ module.exports = {
       return (absolute ? (self.apos.baseUrl + self.apos.prefix) : '') + '/auth/' + spec.name + '/login';
     }
 
-    // Adds the login route, which will be `/modules/apostrophe-login-gitlab/login`.
-    // Redirect users to this URL to start the process of logging them in via gitlab
-
+    // Adds the login route, which will be `/auth/strategyname/login`, where the strategy name
+    // depends on the passport module being used.
+    //
+    // Redirect users to this URL to start the process of logging them in via each strategy
     self.addLoginRoute = function(spec) {
-      self.apos.app.get(self.getLoginUrl(spec), self.apos.login.passport.authenticate(spec.name, spec.authenticate));
+      self.apos.app.get(self.getLoginUrl(spec), (req, res, next) => {
+        if (req.query.locale) {
+          req.session.passportLocaleAfterLogin = req.query.locale;
+          return res.redirect(self.apos.urls.build(req.url, { locale: null }));
+        }
+        return next();
+      }, self.apos.login.passport.authenticate(spec.name, spec.authenticate));
     };
 
-    // Adds the oauth2 callback route, which is invoked 
-      
+    self.expressMiddleware = (req, res, next) => {
+      console.log(`URL: ${req.url} ${req.get('Host')}`, req.session);
+      return next();
+    };
+
+    // Adds the callback route associated with a strategy. oauth-based strategies and
+    // certain others redirect here to complete the login handshake
     self.addCallbackRoute = function(spec) {
       self.apos.app.get(self.getCallbackUrl(spec, false),
         // middleware
@@ -109,6 +128,45 @@ module.exports = {
             failureRedirect: self.getFailureUrl(spec)
           }
         ),
+        (req, res, next) => {
+          if (req.session.passportLocaleAfterLogin) {
+            const locale = req.session.passportLocaleAfterLogin;
+            delete req.session.passportLocaleAfterLogin;
+            const workflow = self.apos.modules['apostrophe-workflow'];
+            if (workflow) {
+              console.log('after login:', req.user, req.session);
+              const crossDomainSessionToken = self.apos.utils.generateId();
+              return workflow.crossDomainSessionCache.set(crossDomainSessionToken, JSON.stringify(req.session), 60 * 60, function(err) {
+                if (err) {
+                  self.apos.util.error('Error storing cross-domain session in cache:', err);
+                  res.status(500).send('error');
+                } else {
+                  let slug = '/';
+                  if (workflow.options.prefixes && workflow.options.prefixes[locale]) {
+                    slug = workflow.options.prefixes[locale] + '/';
+                  }
+                  let url = self.apos.urls.build(workflow.action + '/link-to-locale', {
+                    slug,
+                    locale,
+                    workflowCrossDomainSessionToken: crossDomainSessionToken,
+                    cb: Math.random().toString().replace('.', '')
+                  });
+                  if (workflow.hostnames && workflow.hostnames[locale]) {
+                    const oldLocale = req.locale;
+                    req.locale = locale;
+                    url = self.apos.pages.getBaseUrl(req) + url;
+                    req.locale = oldLocale;
+                  }
+                  console.log(`--> ${url}`);
+                  return res.rawRedirect(url);
+                }
+              });
+            } else {
+              // A session could outlive the decision to use workflow in the project
+              return next();
+            }
+          }
+        },
         // actual route
         self.apos.login.afterLogin
       );
@@ -284,22 +342,19 @@ module.exports = {
       self.apos.tasks.add(self.__meta.name, 'list-urls',
         'Run this task to list the login URLs for each registered strategy.\n' +
         'This is helpful when writing markup to invite users to log in.',
-        function(apos, argv, callback) {
-          return self.listUrlsTask(callback);
-        }
+        self.listUrlsTask
       );
     };
     
-    self.listUrlsTask = function(callback) {
+    self.listUrlsTask = () => {
       console.log('These are the login URLs you may wish to link users to:\n');
       _.each(self.options.strategies, function(spec) {
-        console.log(self.getLoginUrl(spec, true));
+        console.log(`${spec.label}: ${self.getLoginUrl(spec, true)}`);
       });
       console.log('\nThese are the callback URLs you may need to configure on sites:\n');
       _.each(self.options.strategies, function(spec) {
-        console.log(self.getCallbackUrl(spec, true));
+        console.log(`${spec.label}: ${self.getCallbackUrl(spec, true)}`);
       });
-      return callback(null);
     };
 
     // Ensure the existence of an apostrophe-group for newly
@@ -315,6 +370,25 @@ module.exports = {
         return callback(err);
       });
     };
+
+    self.addHelpers({
+      loginLinks() {
+        const workflow = self.apos.modules['apostrophe-workflow'];
+        return self.options.strategies.map(spec => {
+          let href = self.getLoginUrl(spec, true);
+          if (workflow && (Object.keys(workflow.locales).length > 1)) {
+            href = self.apos.urls.build(href, {
+              locale: workflow.liveify(self.apos.templates.contextReq.locale)
+            });
+          }
+          return {
+            name: spec.name,
+            label: spec.label,
+            href
+          };
+        });
+      }
+    })
 
   }
 };
