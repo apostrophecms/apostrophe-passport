@@ -355,11 +355,13 @@ module.exports = {
       self.apos.tasks.add(self.__meta.name, 'list-urls',
         'Run this task to list the login URLs for each registered strategy.\n' +
         'This is helpful when writing markup to invite users to log in.',
-        self.listUrlsTask
+        function(apos, argv, callback) {
+          return self.listUrlsTask(callback);
+        }
       );
     };
     
-    self.listUrlsTask = (apos, argv, callback) => {
+    self.listUrlsTask = function(callback) => {
       console.log('These are the login URLs you may wish to link users to:\n');
       _.each(self.options.strategies, function(spec) {
         console.log(`${spec.label}: ${self.getLoginUrl(spec, true)}`);
