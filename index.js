@@ -361,7 +361,7 @@ module.exports = {
       );
     };
     
-    self.listUrlsTask = function(callback) => {
+    self.listUrlsTask = function(callback) {
       console.log('These are the login URLs you may wish to link users to:\n');
       _.each(self.options.strategies, function(spec) {
         console.log(`${spec.label}: ${self.getLoginUrl(spec, true)}`);
