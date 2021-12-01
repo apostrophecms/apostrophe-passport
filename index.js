@@ -80,7 +80,6 @@ module.exports = {
         let doc = await self.apos.docs.find(req, {
           slug: oldSlug
         }).workflowLocale(oldLocale).joins(false).areas(false).toObject();
-        delete process.env.APOS_LOG_ALL_QUERIES;
         if (doc && doc.workflowGuid) {
           doc = await self.apos.docs.find(req, {
             workflowGuid: doc.workflowGuid
