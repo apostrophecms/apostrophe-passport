@@ -1,5 +1,6 @@
-var _ = require('lodash');
-var humanname = require('humanname');
+const _ = require('lodash');
+const humanname = require('humanname');
+const util = require('util');
 
 module.exports = {
 
@@ -57,11 +58,64 @@ module.exports = {
         self.addFailureRoute(spec);
       });
 
-      self.route(
-        'get',
-        'after-cross-domain-session-token',
-        self.apos.login.afterLogin
-      );
+      self.on('apostrophe-login:after', 'redirectToNewLocale', async req => {
+        const workflow = self.apos.modules['apostrophe-workflow'];
+        if (!workflow) {
+          return;
+        }
+        const cacheSet = util.promisify(workflow.crossDomainSessionCache.set);
+        const deserializeUser = util.promisify(self.apos.login.deserializeUser);
+        if (!req.session.passportWorkflow) {
+          return;
+        }
+        const {
+          oldLocale,
+          newLocale,
+          oldSlug
+        } = req.session.passportWorkflow;
+        delete req.session.passportWorkflow;
+        const crossDomainSessionToken = self.apos.utils.generateId();
+        await cacheSet(crossDomainSessionToken, JSON.stringify(req.session), 60 * 60);
+        req.user = await deserializeUser(req.user._id);
+        let doc = await self.apos.docs.find(req, {
+          slug: oldSlug
+        }).workflowLocale(oldLocale).joins(false).areas(false).toObject();
+        delete process.env.APOS_LOG_ALL_QUERIES;
+        if (doc && doc.workflowGuid) {
+          doc = await self.apos.docs.find(req, {
+            workflowGuid: doc.workflowGuid
+          }).workflowLocale(newLocale).toObject();
+        }
+        if (doc) {
+          slug = doc.slug;
+        } else {
+          // Fall back to home page
+          slug = '/';
+          if (workflow.options.prefixes && workflow.options.prefixes[newLocale]) {
+            slug = workflow.options.prefixes[newLocale] + '/';
+          }
+        }
+        let url = self.apos.urls.build(workflow.action + '/link-to-locale', {
+          slug,
+          newLocale,
+          workflowCrossDomainSessionToken: crossDomainSessionToken,
+          cb: Math.random().toString().replace('.', '')
+        });
+        if (workflow.hostnames && workflow.hostnames[newLocale]) {
+          const oldLocale = req.locale;
+          req.locale = newLocale;
+          url = self.apos.pages.getBaseUrl(req) + url;
+          req.locale = oldLocale;
+        }
+        if (url.match(/^https?:/)) {
+          req.redirect = url;
+        } else {
+          // Because any sitewide prefix will already be added
+          // by res.redirect() as patched by apostrophe and invoked
+          // by the afterLogin handler
+          req.redirect = url.replace(self.apos.prefix, '');
+        }
+      });
     };
 
     // Returns the oauth2 callback URL, which must match the route
@@ -104,17 +158,16 @@ module.exports = {
     // Redirect users to this URL to start the process of logging them in via each strategy
     self.addLoginRoute = function(spec) {
       self.apos.app.get(self.getLoginUrl(spec), (req, res, next) => {
-        if (req.query.locale) {
-          req.session.passportLocaleAfterLogin = req.query.locale;
-          return res.redirect(self.apos.urls.build(req.url, { locale: null }));
+        if (req.query.newLocale) {
+          req.session.passportWorkflow = {
+            oldLocale: req.query.oldLocale,
+            newLocale: req.query.newLocale,
+            oldSlug: req.query.oldSlug
+          };
+          return res.redirect(self.apos.urls.build(req.url, { newLocale: null, oldLocale: null, oldSlug: null }));
         }
         return next();
       }, self.apos.login.passport.authenticate(spec.name, spec.authenticate));
-    };
-
-    self.expressMiddleware = (req, res, next) => {
-      console.log(`URL: ${req.url} ${req.get('Host')}`, req.session);
-      return next();
     };
 
     // Adds the callback route associated with a strategy. oauth-based strategies and
@@ -128,45 +181,6 @@ module.exports = {
             failureRedirect: self.getFailureUrl(spec)
           }
         ),
-        (req, res, next) => {
-          if (req.session.passportLocaleAfterLogin) {
-            const locale = req.session.passportLocaleAfterLogin;
-            delete req.session.passportLocaleAfterLogin;
-            const workflow = self.apos.modules['apostrophe-workflow'];
-            if (workflow) {
-              console.log('after login:', req.user, req.session);
-              const crossDomainSessionToken = self.apos.utils.generateId();
-              return workflow.crossDomainSessionCache.set(crossDomainSessionToken, JSON.stringify(req.session), 60 * 60, function(err) {
-                if (err) {
-                  self.apos.util.error('Error storing cross-domain session in cache:', err);
-                  res.status(500).send('error');
-                } else {
-                  let slug = '/';
-                  if (workflow.options.prefixes && workflow.options.prefixes[locale]) {
-                    slug = workflow.options.prefixes[locale] + '/';
-                  }
-                  let url = self.apos.urls.build(workflow.action + '/link-to-locale', {
-                    slug,
-                    locale,
-                    workflowCrossDomainSessionToken: crossDomainSessionToken,
-                    cb: Math.random().toString().replace('.', '')
-                  });
-                  if (workflow.hostnames && workflow.hostnames[locale]) {
-                    const oldLocale = req.locale;
-                    req.locale = locale;
-                    url = self.apos.pages.getBaseUrl(req) + url;
-                    req.locale = oldLocale;
-                  }
-                  console.log(`--> ${url}`);
-                  return res.rawRedirect(url);
-                }
-              });
-            } else {
-              // A session could outlive the decision to use workflow in the project
-              return next();
-            }
-          }
-        },
         // actual route
         self.apos.login.afterLogin
       );
@@ -346,7 +360,7 @@ module.exports = {
       );
     };
     
-    self.listUrlsTask = () => {
+    self.listUrlsTask = (apos, argv, callback) => {
       console.log('These are the login URLs you may wish to link users to:\n');
       _.each(self.options.strategies, function(spec) {
         console.log(`${spec.label}: ${self.getLoginUrl(spec, true)}`);
@@ -355,6 +369,7 @@ module.exports = {
       _.each(self.options.strategies, function(spec) {
         console.log(`${spec.label}: ${self.getCallbackUrl(spec, true)}`);
       });
+      return callback(null);
     };
 
     // Ensure the existence of an apostrophe-group for newly
@@ -374,11 +389,14 @@ module.exports = {
     self.addHelpers({
       loginLinks() {
         const workflow = self.apos.modules['apostrophe-workflow'];
+        const contextReq = self.apos.templates.contextReq;
         return self.options.strategies.map(spec => {
           let href = self.getLoginUrl(spec, true);
           if (workflow && (Object.keys(workflow.locales).length > 1)) {
             href = self.apos.urls.build(href, {
-              locale: workflow.liveify(self.apos.templates.contextReq.locale)
+              oldLocale: contextReq.locale,
+              newLocale: workflow.liveify(contextReq.locale),
+              oldSlug: workflow.getContext(contextReq) && workflow.getContext(contextReq).slug
             });
           }
           return {

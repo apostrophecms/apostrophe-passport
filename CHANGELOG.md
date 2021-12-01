@@ -1,5 +1,9 @@
 # Changelog
 
+## UNRELEASED
+
+Support automatically returning the user to the correct hostname on sites using `apostrophe-workflow` to accommodate multiple locales.
+
 ## 2.2.1
 
 Fixes the repository information in `package.json`.
