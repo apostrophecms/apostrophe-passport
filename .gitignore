@@ -23,3 +23,5 @@ test/public/css/master-*.less
 
 # Dont commit test uploads
 test/public/uploads
+# Libraries should not commit their package-lock.json file
+/package-lock.json
