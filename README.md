@@ -72,7 +72,22 @@ So in this case, you'll want to add a login button to the `layout.html` of your 
 
 `/auth/gitlab/login`
 
-That's all there is to it. When a user reaches this URL they are redirected to begin the authorization process with Gitlab, or the service of your choice.
+To generate these links automatically, use the `apos.passport.loginLinks` helper (assuming that you have [set an `alias` of `passport` for this module](https://v2.docs.apostrophecms.org/reference/core-server.html#special-property-names-in-module-configuration-objects)):
+
+```markup
+  {% for link in apos.passport.loginLinks() %}
+    <h5 class="demo-login-button"><a href="{{ link.href }}"><span>&#xf090;</span> Log in with {{ link.label }}</a></h5>
+  {% endfor %}
+```
+
+When a user reaches this URL they are redirected to begin the authorization process with Gitlab, or the service of your choice.
+
+Another advantage of using `apos.passport.loginLinks()` is that links generated this way redirect the user back to the same page or piece after login.
+
+
+## What about logging in on a different hostname with workflow?
+
+When localizing your site with the `apostrophe-workflow` module you may have more than one hostname to accommodate separate locales, but only one hostname is configured as the callback URL for the identity provider. However, if you use `apos.passport.loginLinks()`, you will receive login links that automatically return the user to the hostname they were logging in from.
 
 ## Where do I get my `clientID`, `clientSecret`, etc.?
 
