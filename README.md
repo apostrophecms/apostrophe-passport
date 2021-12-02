@@ -72,7 +72,7 @@ So in this case, you'll want to add a login button to the `layout.html` of your 
 
 `/auth/gitlab/login`
 
-To generate these links automatically, use the `apos.passport.links` helper (assuming that you have set an `alias` of `passport` for this module):
+To generate these links automatically, use the `apos.passport.loginLinks` helper (assuming that you have [set an `alias` of `passport` for this module](https://v2.docs.apostrophecms.org/reference/core-server.html#special-property-names-in-module-configuration-objects)):
 
 ```markup
   {% for link in apos.passport.loginLinks() %}
