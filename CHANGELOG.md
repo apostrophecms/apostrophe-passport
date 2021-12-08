@@ -1,16 +1,16 @@
 # Changelog
 
-## UNRELEASED
+## 2.3.0 - 2021-12-08
 
-Support automatically returning the user to the correct hostname on sites using `apostrophe-workflow` to accommodate multiple locales.
+* Support automatically returning the user to the correct hostname on sites using `apostrophe-workflow` to accommodate multiple locales.
 
 ## 2.2.1
 
-Fixes the repository information in `package.json`.
+* Fixes the repository information in `package.json`.
 
 ## 2.2.0
 
-If the `firstName` and `lastName` are available from the strategy, use those in preference to attempting to parse `displayName`. Thanks to RyamBaCo for this contribution.
+* If the `firstName` and `lastName` are available from the strategy, use those in preference to attempting to parse `displayName`. Thanks to RyamBaCo for this contribution.
 
 ## 2.1.0
 
